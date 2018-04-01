@@ -15,7 +15,7 @@ Nfreqs = len(freqs)
 
 # take East pol and rotate to get North pol
 beam_theta, beam_phi = hp.pix2ang(64, np.arange(64**2 * 12))
-R = hp.Rotator(rot=[0,0,-np.pi/2], deg=False)
+R = hp.Rotator(rot=[np.pi/2, 0, 0], deg=False)
 beam_theta2, beam_phi2 = R(beam_theta, beam_phi)
 beam_rot = np.array(map(lambda x: hp.get_interp_val(x, beam_theta2, beam_phi2), beams.T))
 beam_data = np.array([beams.T, beam_rot])
@@ -49,8 +49,8 @@ uvb.Nfreqs = len(freqs)
 uvb.freq_array = freqs.reshape(1, Nfreqs) * 1e6
 uvb.bandpass_array = np.ones((1, uvb.Nfreqs))
 uvb.beam_type = 'power'
-uvb.set_power()
 uvb.polarization_array = np.array([-5, -6])
+uvb.set_power()
 uvb.Npols = 2
 uvb.Naxes_vec = 1
 beams.resize
