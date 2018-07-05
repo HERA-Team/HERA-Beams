@@ -15,6 +15,8 @@ a.add_argument('--calc_cross_pols', help='Calculate cross pol power beams '
                action='store_true', default=False)
 a.add_argument('--healpix', help='Convert to HEALPix',
                action='store_true', default=True)
+a.add_arugment("--hp_nside", default=None, type=int, help="If converting to HEALpix, use"
+               "this NSIDE. Default is closest, yet higher, resolution to input resolution.")
 a.add_argument('--outfile', type=str, help='Output file name', default=None)
 a.add_argument('-f', '--freq_range', nargs=2, type=float,
                help='Frequency range to include in MHz')
@@ -73,7 +75,7 @@ beam.read_cst_beam(beam_files, beam_type=read_beam_type, telescope_name='HERA',
                    model_name=model_name, model_version='1.0')
 
 if not args.efield and args.calc_cross_pols:
-    beam.efield_to_power()
+    beam.efield_to_power(nside=args.hp_nside)
 
 beam.history = 'CST simulations by Nicolas Fagnoni.' + version_str
 
