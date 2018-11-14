@@ -3,6 +3,7 @@ from glob import glob
 import subprocess
 import argparse
 import six
+import fnmatch
 import numpy as np
 from pyuvdata import UVBeam
 
@@ -30,7 +31,11 @@ if not os.path.isdir(nf_repo_path):
 
 model_name = 'E-field pattern - Rigging height 4.9 m'
 file_path = os.path.join(nf_repo_path, 'Radiation patterns/' + model_name + '/')
-beam_files = beam_files = glob(file_path + '*E-pattern*.txt')
+
+beam_files = []
+for root, dirnames, filenames in os.walk(file_path):
+    for filename in fnmatch.filter(filenames, '*E-pattern*.txt'):
+        beam_files.append(os.path.join(root, filename))
 
 git_origin = subprocess.check_output(['git', '-C', nf_repo_path, 'config',
                                       '--get', 'remote.origin.url'],
