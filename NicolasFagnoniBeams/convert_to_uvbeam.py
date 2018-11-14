@@ -30,7 +30,7 @@ if not os.path.isdir(nf_repo_path):
 
 model_name = 'E-field pattern - Rigging height 4.9 m'
 file_path = os.path.join(nf_repo_path, 'Radiation patterns/' + model_name + '/')
-beam_files = beam_files = glob(file_path + '*/*E-pattern*.txt')
+beam_files = beam_files = glob(file_path + '*E-pattern*.txt')
 
 git_origin = subprocess.check_output(['git', '-C', nf_repo_path, 'config',
                                       '--get', 'remote.origin.url'],
@@ -88,7 +88,7 @@ beam.history = 'CST simulations by Nicolas Fagnoni.' + version_str
 
 if args.healpix:
     beam.interpolation_function = 'az_za_simple'
-    beam.to_healpix()
+    beam.to_healpix(nside=hp_nside)
     default_out_file += '_healpix'
 
 default_out_file += '.fits'
