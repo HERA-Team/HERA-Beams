@@ -1,5 +1,4 @@
 import os
-from glob import glob
 import subprocess
 import argparse
 import six
