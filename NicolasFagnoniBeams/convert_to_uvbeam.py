@@ -15,6 +15,8 @@ a.add_argument('--efield', help='Efield rather than power beams',
 a.add_argument('--calc_cross_pols', help='Calculate cross pol power beams '
                '(i.e. xy, yx). Only applies if efield is not True.',
                action='store_true', default=False)
+a.add_argument('--peak_normalize', help='Peak normalize the beam.',
+               action='store_true', default=False)
 a.add_argument('--healpix', help='Convert to HEALPix',
                action='store_true', default=True)
 a.add_argument("--hp_nside", default=None, type=int, help="If converting to HEALpix, use"
@@ -90,6 +92,9 @@ if not args.efield and args.calc_cross_pols:
     beam.efield_to_power(nside=args.hp_nside)
 
 beam.history = 'CST simulations by Nicolas Fagnoni.' + version_str
+
+if args.peak_normalize:
+    beam.peak_normalize()
 
 if args.healpix:
     beam.interpolation_function = 'az_za_simple'
