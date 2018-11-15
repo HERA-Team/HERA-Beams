@@ -93,13 +93,13 @@ if not args.efield and args.calc_cross_pols:
 
 beam.history = 'CST simulations by Nicolas Fagnoni.' + version_str
 
-if args.peak_normalize:
-    beam.peak_normalize()
-
 if args.healpix:
     beam.interpolation_function = 'az_za_simple'
-    beam.to_healpix(nside=hp_nside)
+    beam.to_healpix(nside=args.hp_nside)
     default_out_file += '_healpix'
+
+if args.peak_normalize:
+    beam.peak_normalize()
 
 default_out_file += '.fits'
 if args.outfile is not None:
