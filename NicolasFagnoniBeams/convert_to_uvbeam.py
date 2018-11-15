@@ -1,7 +1,8 @@
 import os
-from glob import glob
 import subprocess
 import argparse
+import six
+import fnmatch
 import numpy as np
 from pyuvdata import UVBeam
 
@@ -13,9 +14,11 @@ a.add_argument('--efield', help='Efield rather than power beams',
 a.add_argument('--calc_cross_pols', help='Calculate cross pol power beams '
                '(i.e. xy, yx). Only applies if efield is not True.',
                action='store_true', default=False)
+a.add_argument('--peak_normalize', help='Peak normalize the beam.',
+               action='store_true', default=False)
 a.add_argument('--healpix', help='Convert to HEALPix',
                action='store_true', default=True)
-a.add_arugment("--hp_nside", default=None, type=int, help="If converting to HEALpix, use"
+a.add_argument("--hp_nside", default=None, type=int, help="If converting to HEALpix, use"
                "this NSIDE. Default is closest, yet higher, resolution to input resolution.")
 a.add_argument('--outfile', type=str, help='Output file name', default=None)
 a.add_argument('-f', '--freq_range', nargs=2, type=float,
@@ -29,7 +32,11 @@ if not os.path.isdir(nf_repo_path):
 
 model_name = 'E-field pattern - Rigging height 4.9 m'
 file_path = os.path.join(nf_repo_path, 'Radiation patterns/' + model_name + '/')
-beam_files = beam_files = glob(file_path + '*/*E-pattern*.txt')
+
+beam_files = []
+for root, dirnames, filenames in os.walk(file_path):
+    for filename in fnmatch.filter(filenames, '*E-pattern*.txt'):
+        beam_files.append(os.path.join(root, filename))
 
 git_origin = subprocess.check_output(['git', '-C', nf_repo_path, 'config',
                                       '--get', 'remote.origin.url'],
@@ -39,9 +46,15 @@ git_hash = subprocess.check_output(['git', '-C', nf_repo_path, 'rev-parse', 'HEA
 git_branch = subprocess.check_output(['git', '-C', nf_repo_path, 'rev-parse',
                                       '--abbrev-ref', 'HEAD'],
                                      stderr=subprocess.STDOUT).strip()
-version_str = ('  Git origin: ' + git_origin +
-               '.  Git branch: ' + git_branch +
-               '.  Git hash: ' + git_hash + '.')
+
+if six.PY3:
+    git_origin = git_origin.decode('utf8')
+    git_hash = git_hash.decode('utf8')
+    git_branch = git_branch.decode('utf8')
+
+version_str = ('  Git origin: ' + git_origin
+               + '.  Git branch: ' + git_branch
+               + '.  Git hash: ' + git_hash + '.')
 
 beam = UVBeam()
 default_out_file = 'NF_HERA'
@@ -52,8 +65,8 @@ if args.freq_range is not None:
     frequencies = [beam1.name2freq(f) for f in beam_files]
     # convert to MHz
     frequencies = np.array(frequencies) / 1e6
-    files_to_use = np.where((frequencies >= args.freq_range[0]) &
-                            (frequencies <= args.freq_range[1]))[0]
+    files_to_use = np.where((frequencies >= args.freq_range[0])
+                            & (frequencies <= args.freq_range[1]))[0]
     if files_to_use.size == 0:
         raise ValueError('No files included in freq_range.')
 
@@ -80,8 +93,12 @@ if not args.efield and args.calc_cross_pols:
 beam.history = 'CST simulations by Nicolas Fagnoni.' + version_str
 
 if args.healpix:
-    beam.az_za_to_healpix()
+    beam.interpolation_function = 'az_za_simple'
+    beam.to_healpix(nside=args.hp_nside)
     default_out_file += '_healpix'
+
+if args.peak_normalize:
+    beam.peak_normalize()
 
 default_out_file += '.fits'
 if args.outfile is not None:
