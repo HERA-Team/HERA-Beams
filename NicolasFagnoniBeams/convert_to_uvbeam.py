@@ -16,8 +16,8 @@ a.add_argument('--calc_cross_pols', help='Calculate cross pol power beams '
                action='store_true', default=False)
 a.add_argument('--peak_normalize', help='Peak normalize the beam.',
                action='store_true', default=False)
-a.add_argument('--healpix', help='Convert to HEALPix',
-               action='store_true', default=True)
+a.add_argument('--no_healpix', help='Convert to HEALPix',
+               action='store_true', default=False)
 a.add_argument("--hp_nside", default=None, type=int, help="If converting to HEALpix, use"
                "this NSIDE. Default is closest, yet higher, resolution to input resolution.")
 a.add_argument('--outfile', type=str, help='Output file name', default=None)
@@ -92,7 +92,7 @@ if not args.efield and args.calc_cross_pols:
 
 beam.history = 'CST simulations by Nicolas Fagnoni.' + version_str
 
-if args.healpix:
+if not args.no_healpix:
     beam.interpolation_function = 'az_za_simple'
     beam.to_healpix(nside=args.hp_nside)
     default_out_file += '_healpix'
