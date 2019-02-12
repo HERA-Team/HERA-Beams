@@ -5,6 +5,7 @@ import six
 import fnmatch
 import numpy as np
 from pyuvdata import UVBeam
+import glob
 
 a = argparse.ArgumentParser(description="A command-line script to convert Nicolas "
                             "Fagnoni's CST simulations to UVBeam FITS files.")
@@ -28,26 +29,32 @@ a.add_argument('-f', '--freq_range', nargs=2, type=float,
 
 args = a.parse_args()
 
-beam_files = beam_files = sorted(glob(os.path.join(args.data_dir, '*E-pattern*MHz.txt')))
+beam_files = beam_files = sorted(glob.glob(os.path.join(args.data_dir, '*E-pattern*MHz.txt')))
 model_name = os.path.basename(args.data_dir)
+if model_name == "":
+    model_name = "None"
 
-git_origin = subprocess.check_output(['git', '-C', args.data_dir, 'config',
-                                      '--get', 'remote.origin.url'],
-                                     stderr=subprocess.STDOUT).strip()
-git_hash = subprocess.check_output(['git', '-C', args.data_dir, 'rev-parse', 'HEAD'],
-                                   stderr=subprocess.STDOUT).strip()
-git_branch = subprocess.check_output(['git', '-C', args.data_dir, 'rev-parse',
-                                      '--abbrev-ref', 'HEAD'],
-                                     stderr=subprocess.STDOUT).strip()
+# try to get git info
+try:
+    git_origin = subprocess.check_output(['git', '-C', args.data_dir, 'config',
+                                          '--get', 'remote.origin.url'],
+                                         stderr=subprocess.STDOUT).strip()
+    git_hash = subprocess.check_output(['git', '-C', args.data_dir, 'rev-parse', 'HEAD'],
+                                       stderr=subprocess.STDOUT).strip()
+    git_branch = subprocess.check_output(['git', '-C', args.data_dir, 'rev-parse',
+                                          '--abbrev-ref', 'HEAD'],
+                                         stderr=subprocess.STDOUT).strip()
 
-if six.PY3:
-    git_origin = git_origin.decode('utf8')
-    git_hash = git_hash.decode('utf8')
-    git_branch = git_branch.decode('utf8')
+    if six.PY3:
+        git_origin = git_origin.decode('utf8')
+        git_hash = git_hash.decode('utf8')
+        git_branch = git_branch.decode('utf8')
 
-version_str = ('  Git origin: ' + git_origin
-               + '.  Git branch: ' + git_branch
-               + '.  Git hash: ' + git_hash + '.')
+    version_str = ('  Git origin: ' + git_origin
+                   + '.  Git branch: ' + git_branch
+                   + '.  Git hash: ' + git_hash + '.')
+except subprocess.CalledProcessError:
+    version_str = "No Git info found."
 
 beam = UVBeam()
 default_out_file = 'NF_HERA'
@@ -101,15 +108,29 @@ else:
 
 beam.write_beamfits(outfile, clobber=True)
 
-# utility function for updating filename of N. Fagnoni CST
+# utility function for updating files of N. Fagnoni CST
 # output for new Vivaldi feed into format compatible with above routine
 # Dated: 2/12/2019
 def change_name(filename):
+    """Edits the filename of new feed .txt files to match old convention"""
     start = filename.find("f=") + 2
     end = filename[start:].find("[1]")-1
     freq = filename[start:][:end]
     pattern = "f={}".format(freq)
-    newfile = "{}_{:.2f}MHz.txt".format(filename[:start-3], float(freq))
+    newfile = "{}_{:06.2f}MHz.txt".format(filename[:start-3], float(freq))
     newfile = newfile.replace("farfield", "pattern")
     return newfile
 
+def edit_new_files(filenames):
+    """
+    Updates the filename and content of new CST .txt files
+    to match old .txt file format
+    """
+    for df in filenames:
+        nf = change_name(df)
+        with open(df, 'r') as f:
+            lines = f.readlines()
+        # update header e-field into v
+        lines[0] = lines[0].replace("E-field", "V")
+        with open(nf, 'w') as f:
+            f.write(''.join(lines))
