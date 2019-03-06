@@ -5,10 +5,11 @@ import six
 import fnmatch
 import numpy as np
 from pyuvdata import UVBeam
+import glob
 
 a = argparse.ArgumentParser(description="A command-line script to convert Nicolas "
                             "Fagnoni's CST simulations to UVBeam FITS files.")
-a.add_argument('nf_repo_path', type=str, help="Path to Nicolas Fagnoni's git repo")
+a.add_argument('data_dir', type=str, help="Directory holding Nicolas Fagnoni's CST file outputs with *MHz.txt ending.")
 a.add_argument('--efield', help='Efield rather than power beams',
                action='store_true', default=False)
 a.add_argument('--calc_cross_pols', help='Calculate cross pol power beams '
@@ -20,41 +21,40 @@ a.add_argument('--no_healpix', help='Convert to HEALPix',
                action='store_true', default=False)
 a.add_argument("--hp_nside", default=None, type=int, help="If converting to HEALpix, use"
                "this NSIDE. Default is closest, yet higher, resolution to input resolution.")
+a.add_argument("--interp_func", type=str, default="az_za_simple", help="If converting to HEALpix, "
+               "use this interpolation function in pyuvdata.UVBeam. Only az_za_simple supported currently.")
 a.add_argument('--outfile', type=str, help='Output file name', default=None)
 a.add_argument('-f', '--freq_range', nargs=2, type=float,
                help='Frequency range to include in MHz')
 
 args = a.parse_args()
-nf_repo_path = os.path.expanduser(args.nf_repo_path)
 
-if not os.path.isdir(nf_repo_path):
-    raise ValueError("Path to Nicolas Fagnoni's simulations not found.")
+beam_files = beam_files = sorted(glob.glob(os.path.join(args.data_dir, '*E-pattern*MHz.txt')))
+model_name = os.path.basename(args.data_dir)
+if model_name == "":
+    model_name = "None"
 
-model_name = 'E-field pattern - Rigging height 4.9 m'
-file_path = os.path.join(nf_repo_path, 'Radiation patterns/' + model_name + '/')
+# try to get git info
+try:
+    git_origin = subprocess.check_output(['git', '-C', args.data_dir, 'config',
+                                          '--get', 'remote.origin.url'],
+                                         stderr=subprocess.STDOUT).strip()
+    git_hash = subprocess.check_output(['git', '-C', args.data_dir, 'rev-parse', 'HEAD'],
+                                       stderr=subprocess.STDOUT).strip()
+    git_branch = subprocess.check_output(['git', '-C', args.data_dir, 'rev-parse',
+                                          '--abbrev-ref', 'HEAD'],
+                                         stderr=subprocess.STDOUT).strip()
 
-beam_files = []
-for root, dirnames, filenames in os.walk(file_path):
-    for filename in fnmatch.filter(filenames, '*E-pattern*.txt'):
-        beam_files.append(os.path.join(root, filename))
+    if six.PY3:
+        git_origin = git_origin.decode('utf8')
+        git_hash = git_hash.decode('utf8')
+        git_branch = git_branch.decode('utf8')
 
-git_origin = subprocess.check_output(['git', '-C', nf_repo_path, 'config',
-                                      '--get', 'remote.origin.url'],
-                                     stderr=subprocess.STDOUT).strip()
-git_hash = subprocess.check_output(['git', '-C', nf_repo_path, 'rev-parse', 'HEAD'],
-                                   stderr=subprocess.STDOUT).strip()
-git_branch = subprocess.check_output(['git', '-C', nf_repo_path, 'rev-parse',
-                                      '--abbrev-ref', 'HEAD'],
-                                     stderr=subprocess.STDOUT).strip()
-
-if six.PY3:
-    git_origin = git_origin.decode('utf8')
-    git_hash = git_hash.decode('utf8')
-    git_branch = git_branch.decode('utf8')
-
-version_str = ('  Git origin: ' + git_origin
-               + '.  Git branch: ' + git_branch
-               + '.  Git hash: ' + git_hash + '.')
+    version_str = ('  Git origin: ' + git_origin
+                   + '.  Git branch: ' + git_branch
+                   + '.  Git hash: ' + git_hash + '.')
+except subprocess.CalledProcessError:
+    version_str = "No Git info found."
 
 beam = UVBeam()
 default_out_file = 'NF_HERA'
@@ -93,7 +93,7 @@ if not args.efield and args.calc_cross_pols:
 beam.history = 'CST simulations by Nicolas Fagnoni.' + version_str
 
 if not args.no_healpix:
-    beam.interpolation_function = 'az_za_simple'
+    beam.interpolation_function = args.interp_func
     beam.to_healpix(nside=args.hp_nside)
     default_out_file += '_healpix'
 
@@ -107,3 +107,30 @@ else:
     outfile = default_out_file
 
 beam.write_beamfits(outfile, clobber=True)
+
+# utility function for updating files of N. Fagnoni CST
+# output for new Vivaldi feed into format compatible with above routine
+# Dated: 2/12/2019
+def change_name(filename):
+    """Edits the filename of new feed .txt files to match old convention"""
+    start = filename.find("f=") + 2
+    end = filename[start:].find("[1]")-1
+    freq = filename[start:][:end]
+    pattern = "f={}".format(freq)
+    newfile = "{}_{:06.2f}MHz.txt".format(filename[:start-3], float(freq))
+    newfile = newfile.replace("farfield", "pattern")
+    return newfile
+
+def edit_new_files(filenames):
+    """
+    Updates the filename and content of new CST .txt files
+    to match old .txt file format
+    """
+    for df in filenames:
+        nf = change_name(df)
+        with open(df, 'r') as f:
+            lines = f.readlines()
+        # update header e-field into v
+        lines[0] = lines[0].replace("E-field", "V")
+        with open(nf, 'w') as f:
+            f.write(''.join(lines))
